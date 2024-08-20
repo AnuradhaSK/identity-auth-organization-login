@@ -407,6 +407,13 @@ public class OrganizationAuthenticator extends OpenIDConnectAuthenticator {
             context.setProperty(ORG_ID_PARAMETER, organizationId);
             String organizationName = getOrganizationNameById(organizationId);
             context.setProperty(ORG_PARAMETER, organizationName);
+        } else if (request.getParameterMap().containsKey(LOGIN_HINT_PARAMETER)){
+            String discoveryInput = request.getParameter(LOGIN_HINT_PARAMETER);
+            context.setProperty(ORG_DISCOVERY_PARAMETER, discoveryInput);
+            if (!validateDiscoveryAttributeValue(discoveryInput, context, response)) {
+                context.removeProperty(ORG_DISCOVERY_PARAMETER);
+                return AuthenticatorFlowStatus.INCOMPLETE;
+            }
         } else if (request.getParameterMap().containsKey(ORG_DISCOVERY_PARAMETER)) {
             String discoveryInput = request.getParameter(ORG_DISCOVERY_PARAMETER);
             context.setProperty(ORG_DISCOVERY_PARAMETER, discoveryInput);
@@ -524,6 +531,7 @@ public class OrganizationAuthenticator extends OpenIDConnectAuthenticator {
 
         String appResideOrgId = getOrgIdByTenantDomain(context.getLoginTenantDomain());
         Object discoveryType = context.getProperty(ORGANIZATION_DISCOVERY_TYPE);
+
         try {
             if (discoveryType != null) {
                 String organizationId = getOrganizationDiscoveryManager().getOrganizationIdByDiscoveryAttribute
@@ -531,6 +539,18 @@ public class OrganizationAuthenticator extends OpenIDConnectAuthenticator {
                 if (StringUtils.isNotBlank(organizationId)) {
                     context.setProperty(ORG_ID_PARAMETER, organizationId);
                     return true;
+                }
+            } else {
+                // Check whether only one discovery type is there.
+                boolean organizationDiscoveryEnabled = isOrganizationDiscoveryEnabled(context);
+                if (organizationDiscoveryEnabled) {
+                    discoveryType = context.getProperty(ORGANIZATION_DISCOVERY_TYPE);
+                    String organizationId = getOrganizationDiscoveryManager().getOrganizationIdByDiscoveryAttribute
+                            (discoveryType.toString(), discoveryInput, appResideOrgId);
+                    if (StringUtils.isNotBlank(organizationId)) {
+                        context.setProperty(ORG_ID_PARAMETER, organizationId);
+                        return true;
+                    }
                 }
             }
             context.setProperty(ORGANIZATION_LOGIN_FAILURE, "Can't identify organization");
@@ -585,6 +605,7 @@ public class OrganizationAuthenticator extends OpenIDConnectAuthenticator {
             boolean discoveryEnabled = isOrganizationDiscoveryEnabled(context);
             if (discoveryEnabled) {
                 addQueryParam(queryStringBuilder, ORG_DISCOVERY_ENABLED_PARAMETER, "true");
+               // addQueryParam(queryStringBuilder, "login_hint", "anuradhak@xyz.com" );
             }
 
             boolean redirectToOrgNameCapture = false;
